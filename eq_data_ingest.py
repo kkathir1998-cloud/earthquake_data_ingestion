@@ -8,11 +8,6 @@ from datetime import datetime, timezone
 # Configuration
 # =====================================================
 
-print("===== EARTHQUAKE INGESTION DEBUG VERSION =====")
-print("Host configured:", bool(os.environ.get("DATABRICKS_HOST")))
-print("Token configured:", bool(os.environ.get("DATABRICKS_TOKEN")))
-print("Warehouse configured:", bool(os.environ.get("WAREHOUSE_ID")))
-
 DATABRICKS_HOST = os.environ["DATABRICKS_HOST"].rstrip("/")
 DATABRICKS_TOKEN = os.environ["DATABRICKS_TOKEN"]
 WAREHOUSE_ID = os.environ["WAREHOUSE_ID"]
@@ -27,11 +22,6 @@ HEADERS = {
     "Authorization": f"Bearer {DATABRICKS_TOKEN}",
     "Content-Type": "application/json"
 }
-
-print("Host configured:", bool(DATABRICKS_HOST))
-print("Warehouse configured:", bool(WAREHOUSE_ID))
-print("Warehouse ID length:", len(WAREHOUSE_ID))
-
 
 # =====================================================
 # Execute SQL
@@ -52,16 +42,7 @@ def execute_sql(sql_text):
         timeout=60
     )
 
-    print("\n========== SQL REQUEST ==========")
-    print("Status Code:", response.status_code)
-    print("Response Text:")
-    print(response.text)
-    print("=================================\n")
-
-    if not response.ok:
-        raise Exception(
-            f"SQL API Error\nStatus={response.status_code}\n{response.text}"
-        )
+    response.raise_for_status()
 
     result = response.json()
 
@@ -75,23 +56,17 @@ def execute_sql(sql_text):
             timeout=60
         )
 
-        print("Statement Status:", status_response.status_code)
-
         status_response.raise_for_status()
 
         status_json = status_response.json()
 
         state = status_json["status"]["state"]
 
-        print("Current State:", state)
-
         if state == "SUCCEEDED":
             return status_json
 
         if state in ["FAILED", "CANCELED", "CLOSED"]:
-            raise Exception(
-                json.dumps(status_json, indent=2)
-            )
+            raise Exception(json.dumps(status_json, indent=2))
 
         time.sleep(2)
 
@@ -113,7 +88,6 @@ if not features:
     print("No earthquake records found")
     raise SystemExit(0)
 
-
 # =====================================================
 # Read Processed IDs
 # =====================================================
@@ -133,11 +107,10 @@ try:
     for row in rows:
         processed_ids.add(row[0])
 
-except Exception as e:
-    print("Error reading processed ids:", str(e))
+except Exception:
+    pass
 
 print("Processed IDs:", len(processed_ids))
-
 
 # =====================================================
 # Filter New Records
@@ -151,7 +124,6 @@ new_features = [
 
 print("New earthquakes:", len(new_features))
 
-
 # =====================================================
 # Exit if nothing new
 # =====================================================
@@ -159,7 +131,6 @@ print("New earthquakes:", len(new_features))
 if not new_features:
     print("No new earthquake events")
     raise SystemExit(0)
-
 
 # =====================================================
 # Upload File
@@ -195,13 +166,9 @@ upload_response = requests.put(
     timeout=120
 )
 
-print("Upload Status:", upload_response.status_code)
-print("Upload Response:", upload_response.text)
-
 upload_response.raise_for_status()
 
-print("File Uploaded:", file_path)
-
+print("File uploaded:", file_path)
 
 # =====================================================
 # Record Processed IDs
@@ -230,4 +197,4 @@ VALUES
 
 execute_sql(insert_sql)
 
-print("process_id recorded:", len(new_features))
+print("Processed IDs recorded:", len(new_features))
