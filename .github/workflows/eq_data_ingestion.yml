@@ -22,6 +22,19 @@ jobs:
         run: |
           pip install requests
 
+      - name: Verify environment
+        env:
+          DATABRICKS_HOST: ${{ secrets.DB_HOST }}
+          WAREHOUSE_ID: ${{ secrets.WAREHOUSE_ID }}
+        run: |
+          echo "DB Host configured"
+          echo "Warehouse ID length: ${#WAREHOUSE_ID}"
+
+      - name: Display script being executed
+        run: |
+          echo "===== FILE CONTENT ====="
+          head -n 50 eq_data_ingest.py
+
       - name: Run earthquake ingestion
         env:
           DATABRICKS_HOST: ${{ secrets.DB_HOST }}
