@@ -1,0 +1,30 @@
+name: Earthquake Ingestion
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Run earthquake ingestion
+        env:
+          DATABRICKS_HOST: ${{ secrets.DB_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DB_TOKEN }}
+        run: |
+          python ingest.py
