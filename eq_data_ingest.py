@@ -12,17 +12,11 @@ DATABRICKS_HOST = os.environ["DATABRICKS_HOST"].rstrip("/")
 DATABRICKS_TOKEN = os.environ["DATABRICKS_TOKEN"]
 WAREHOUSE_ID = os.environ["WAREHOUSE_ID"]
 
-USGS_URL = (
-    "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
-)
+USGS_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
 
-PROCESSED_TABLE = (
-    "workspace.earthquake_live_feed.processed_earthquake_ids"
-)
+PROCESSED_TABLE = "workspace.earthquake_live_feed.processed_earthquake_ids"
 
-VOLUME_PATH = (
-    "/Volumes/workspace/earthquake_live_feed/incoming"
-)
+VOLUME_PATH = "/Volumes/workspace/earthquake_live_feed/incoming"
 
 HEADERS = {
     "Authorization": f"Bearer {DATABRICKS_TOKEN}",
@@ -30,31 +24,14 @@ HEADERS = {
 }
 
 # =====================================================
-# Download USGS Feed
-# =====================================================
-
-response = requests.post(
-    f"{DATABRICKS_HOST}/api/2.0/sql/statements",
-    headers=HEADERS,
-    json=payload,
-    timeout=60
-)
-
-print("Status:", response.status_code)
-print("Response:", response.text)
-
-response.raise_for_status()
-
-# =====================================================
-# Execute SQL
+# SQL Execution Function
 # =====================================================
 
 def execute_sql(sql_text):
 
     payload = {
-        "warehouse_id": WAREHOUSE_ID,
         "statement": sql_text,
-        "wait_timeout": "30s"
+        "warehouse_id": WAREHOUSE_ID
     }
 
     response = requests.post(
@@ -63,6 +40,9 @@ def execute_sql(sql_text):
         json=payload,
         timeout=60
     )
+
+    print("Status Code:", response.status_code)
+    print("Response Body:", response.text)
 
     response.raise_for_status()
 
@@ -95,7 +75,20 @@ def execute_sql(sql_text):
         time.sleep(2)
 
 # =====================================================
-# Read processed IDs
+# Download USGS Feed
+# =====================================================
+
+response = requests.get(USGS_URL, timeout=30)
+response.raise_for_status()
+
+data = response.json()
+
+features = data.get("features", [])
+
+print("USGS feed records:", len(features))
+
+# =====================================================
+# Read Processed IDs
 # =====================================================
 
 query = f"""
@@ -108,7 +101,6 @@ result = execute_sql(query)
 processed_ids = set()
 
 if "result" in result:
-
     data_array = result["result"].get("data_array", [])
 
     for row in data_array:
@@ -117,7 +109,7 @@ if "result" in result:
 print("Processed IDs:", len(processed_ids))
 
 # =====================================================
-# Original Validation Logic
+# Filter New Earthquakes
 # =====================================================
 
 new_features = [
@@ -129,7 +121,7 @@ new_features = [
 print("New earthquakes:", len(new_features))
 
 # =====================================================
-# Create File Only If New Records Exist
+# Upload New Records
 # =====================================================
 
 if new_features:
@@ -148,8 +140,7 @@ if new_features:
     )
 
     upload_url = (
-        f"{DATABRICKS_HOST}"
-        f"/api/2.0/fs/files{file_path}"
+        f"{DATABRICKS_HOST}/api/2.0/fs/files{file_path}"
     )
 
     upload_headers = {
@@ -163,6 +154,9 @@ if new_features:
         data=json_content.encode("utf-8"),
         timeout=120
     )
+
+    print("Upload Status:", upload_response.status_code)
+    print("Upload Response:", upload_response.text)
 
     upload_response.raise_for_status()
 
@@ -187,10 +181,7 @@ if new_features:
 
     for feature in new_features:
 
-        earthquake_id = (
-            feature["id"]
-            .replace("'", "''")
-        )
+        earthquake_id = feature["id"].replace("'", "''")
 
         values.append(
             f"('{earthquake_id}', TIMESTAMP '{ingestion_time}')"
@@ -200,12 +191,9 @@ if new_features:
     INSERT INTO {PROCESSED_TABLE}
     (earthquake_id, ingestion_time)
     VALUES
-    {','.join(values)}
+    {",".join(values)}
     """
 
     execute_sql(insert_sql)
 
-    print(
-        "process_id recorded:",
-        len(new_features)
-    )
+    print("process_id recorded:", len(new_features))
