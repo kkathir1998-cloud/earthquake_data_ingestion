@@ -33,13 +33,17 @@ HEADERS = {
 # Download USGS Feed
 # =====================================================
 
-response = requests.get(USGS_URL, timeout=30)
+response = requests.post(
+    f"{DATABRICKS_HOST}/api/2.0/sql/statements",
+    headers=HEADERS,
+    json=payload,
+    timeout=60
+)
+
+print("Status:", response.status_code)
+print("Response:", response.text)
+
 response.raise_for_status()
-
-data = response.json()
-features = data["features"]
-
-print("USGS feed records:", len(features))
 
 # =====================================================
 # Execute SQL
