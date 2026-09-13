@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 print("===== EARTHQUAKE INGESTION DEBUG VERSION =====")
 print("Host configured:", bool(os.environ.get("DATABRICKS_HOST")))
 print("Token configured:", bool(os.environ.get("DATABRICKS_TOKEN")))
-print("Warehouse configured:", bool
+print("Warehouse configured:", bool(os.environ.get("WAREHOUSE_ID")))
 
 DATABRICKS_HOST = os.environ["DATABRICKS_HOST"].rstrip("/")
 DATABRICKS_TOKEN = os.environ["DATABRICKS_TOKEN"]
