@@ -1,0 +1,6 @@
+- name: List Warehouses
+  env:
+    DATABRICKS_HOST: ${{ secrets.DB_HOST }}
+    DATABRICKS_TOKEN: ${{ secrets.DB_TOKEN }}
+  run: |
+    python list_warehouses.py
