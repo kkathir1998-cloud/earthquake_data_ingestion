@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 # Configuration
 # =====================================================
 
+print("===== EARTHQUAKE INGESTION DEBUG VERSION =====")
+
 DATABRICKS_HOST = os.environ["DATABRICKS_HOST"].rstrip("/")
 DATABRICKS_TOKEN = os.environ["DATABRICKS_TOKEN"]
 WAREHOUSE_ID = os.environ["WAREHOUSE_ID"]
@@ -29,14 +31,15 @@ print("Warehouse ID length:", len(WAREHOUSE_ID))
 
 
 # =====================================================
-# Execute SQL Statement
+# Execute SQL
 # =====================================================
 
 def execute_sql(sql_text):
 
     payload = {
         "warehouse_id": WAREHOUSE_ID,
-        "statement": sql_text
+        "statement": sql_text,
+        "wait_timeout": "50s"
     }
 
     response = requests.post(
@@ -46,13 +49,16 @@ def execute_sql(sql_text):
         timeout=60
     )
 
-    print("================================")
-    print("SQL API STATUS:", response.status_code)
-    print("SQL API RESPONSE:")
+    print("\n========== SQL REQUEST ==========")
+    print("Status Code:", response.status_code)
+    print("Response Text:")
     print(response.text)
-    print("================================")
+    print("=================================\n")
 
-    response.raise_for_status()
+    if not response.ok:
+        raise Exception(
+            f"SQL API Error\nStatus={response.status_code}\n{response.text}"
+        )
 
     result = response.json()
 
@@ -66,13 +72,15 @@ def execute_sql(sql_text):
             timeout=60
         )
 
+        print("Statement Status:", status_response.status_code)
+
         status_response.raise_for_status()
 
         status_json = status_response.json()
 
         state = status_json["status"]["state"]
 
-        print("Statement Status:", state)
+        print("Current State:", state)
 
         if state == "SUCCEEDED":
             return status_json
@@ -86,7 +94,7 @@ def execute_sql(sql_text):
 
 
 # =====================================================
-# Download Earthquake Feed
+# Download USGS Feed
 # =====================================================
 
 response = requests.get(USGS_URL, timeout=30)
@@ -99,7 +107,7 @@ features = data.get("features", [])
 print("USGS feed records:", len(features))
 
 if not features:
-    print("No earthquake data found")
+    print("No earthquake records found")
     raise SystemExit(0)
 
 
@@ -117,13 +125,13 @@ result = execute_sql(query)
 processed_ids = set()
 
 try:
-    data_array = result["result"]["data_array"]
+    rows = result["result"]["data_array"]
 
-    for row in data_array:
+    for row in rows:
         processed_ids.add(row[0])
 
-except Exception:
-    print("No existing processed IDs found")
+except Exception as e:
+    print("Error reading processed ids:", str(e))
 
 print("Processed IDs:", len(processed_ids))
 
@@ -142,81 +150,81 @@ print("New earthquakes:", len(new_features))
 
 
 # =====================================================
+# Exit if nothing new
+# =====================================================
+
+if not new_features:
+    print("No new earthquake events")
+    raise SystemExit(0)
+
+
+# =====================================================
 # Upload File
 # =====================================================
 
-if new_features:
+timestamp = datetime.now(
+    timezone.utc
+).strftime("%Y%m%d%H%M%S")
 
-    timestamp = datetime.now(
-        timezone.utc
-    ).strftime("%Y%m%d%H%M%S")
+filename = f"earthquake_{timestamp}.json"
 
-    filename = f"earthquake_{timestamp}.json"
+file_path = f"{VOLUME_PATH}/{filename}"
 
-    file_path = f"{VOLUME_PATH}/{filename}"
+json_content = "\n".join(
+    json.dumps(feature)
+    for feature in new_features
+)
 
-    json_content = "\n".join(
-        json.dumps(feature)
-        for feature in new_features
-    )
+upload_url = (
+    f"{DATABRICKS_HOST}"
+    f"/api/2.0/fs/files{file_path}"
+)
 
-    upload_url = (
-        f"{DATABRICKS_HOST}"
-        f"/api/2.0/fs/files{file_path}"
-    )
+upload_headers = {
+    "Authorization": f"Bearer {DATABRICKS_TOKEN}",
+    "Content-Type": "application/octet-stream"
+}
 
-    upload_headers = {
-        "Authorization": f"Bearer {DATABRICKS_TOKEN}",
-        "Content-Type": "application/octet-stream"
-    }
+upload_response = requests.put(
+    upload_url,
+    headers=upload_headers,
+    data=json_content.encode("utf-8"),
+    timeout=120
+)
 
-    upload_response = requests.put(
-        upload_url,
-        headers=upload_headers,
-        data=json_content.encode("utf-8"),
-        timeout=120
-    )
+print("Upload Status:", upload_response.status_code)
+print("Upload Response:", upload_response.text)
 
-    print("Upload Status:", upload_response.status_code)
-    print("Upload Response:", upload_response.text)
+upload_response.raise_for_status()
 
-    upload_response.raise_for_status()
-
-    print("File uploaded:", file_path)
-
-else:
-
-    print("No new earthquake events")
-    print("No file created")
+print("File Uploaded:", file_path)
 
 
 # =====================================================
 # Record Processed IDs
 # =====================================================
 
-if new_features:
+ingestion_time = datetime.now(
+    timezone.utc
+).strftime("%Y-%m-%d %H:%M:%S")
 
-    ingestion_time = datetime.now(
-        timezone.utc
-    ).strftime("%Y-%m-%d %H:%M:%S")
+values = []
 
-    values = []
+for feature in new_features:
 
-    for feature in new_features:
+    earthquake_id = feature["id"].replace("'", "''")
 
-        earthquake_id = feature["id"].replace("'", "''")
+    values.append(
+        f"('{earthquake_id}', TIMESTAMP '{ingestion_time}')"
+    )
 
-        values.append(
-            f"('{earthquake_id}', TIMESTAMP '{ingestion_time}')"
-        )
+insert_sql = f"""
+INSERT INTO {PROCESSED_TABLE}
+(earthquake_id, ingestion_time)
+VALUES
+{','.join(values)}
+"""
 
-    insert_sql = f"""
-    INSERT INTO {PROCESSED_TABLE}
-    (earthquake_id, ingestion_time)
-    VALUES
-    {','.join(values)}
-    """
+execute_sql(insert_sql)
 
-    execute_sql(insert_sql)
-
-    print("process_id recorded:", len(new_features))
+print("process_id recorded:", len(new_features))
