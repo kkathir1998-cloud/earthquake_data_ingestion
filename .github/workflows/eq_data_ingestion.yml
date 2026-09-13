@@ -26,5 +26,6 @@ jobs:
         env:
           DATABRICKS_HOST: ${{ secrets.DB_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DB_TOKEN }}
+          WAREHOUSE_ID: ${{ secrets.WAREHOUSE_ID }}
         run: |
           python eq_data_ingest.py
