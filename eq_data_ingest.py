@@ -23,15 +23,20 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
+print("Host configured:", bool(DATABRICKS_HOST))
+print("Warehouse configured:", bool(WAREHOUSE_ID))
+print("Warehouse ID length:", len(WAREHOUSE_ID))
+
+
 # =====================================================
-# SQL Execution Function
+# Execute SQL Statement
 # =====================================================
 
 def execute_sql(sql_text):
 
     payload = {
-        "statement": sql_text,
-        "warehouse_id": WAREHOUSE_ID
+        "warehouse_id": WAREHOUSE_ID,
+        "statement": sql_text
     }
 
     response = requests.post(
@@ -41,8 +46,11 @@ def execute_sql(sql_text):
         timeout=60
     )
 
-    print("Status Code:", response.status_code)
-    print("Response Body:", response.text)
+    print("================================")
+    print("SQL API STATUS:", response.status_code)
+    print("SQL API RESPONSE:")
+    print(response.text)
+    print("================================")
 
     response.raise_for_status()
 
@@ -64,18 +72,21 @@ def execute_sql(sql_text):
 
         state = status_json["status"]["state"]
 
+        print("Statement Status:", state)
+
         if state == "SUCCEEDED":
             return status_json
 
         if state in ["FAILED", "CANCELED", "CLOSED"]:
             raise Exception(
-                f"Statement failed: {json.dumps(status_json, indent=2)}"
+                json.dumps(status_json, indent=2)
             )
 
         time.sleep(2)
 
+
 # =====================================================
-# Download USGS Feed
+# Download Earthquake Feed
 # =====================================================
 
 response = requests.get(USGS_URL, timeout=30)
@@ -86,6 +97,11 @@ data = response.json()
 features = data.get("features", [])
 
 print("USGS feed records:", len(features))
+
+if not features:
+    print("No earthquake data found")
+    raise SystemExit(0)
+
 
 # =====================================================
 # Read Processed IDs
@@ -100,16 +116,20 @@ result = execute_sql(query)
 
 processed_ids = set()
 
-if "result" in result:
-    data_array = result["result"].get("data_array", [])
+try:
+    data_array = result["result"]["data_array"]
 
     for row in data_array:
         processed_ids.add(row[0])
 
+except Exception:
+    print("No existing processed IDs found")
+
 print("Processed IDs:", len(processed_ids))
 
+
 # =====================================================
-# Filter New Earthquakes
+# Filter New Records
 # =====================================================
 
 new_features = [
@@ -120,8 +140,9 @@ new_features = [
 
 print("New earthquakes:", len(new_features))
 
+
 # =====================================================
-# Upload New Records
+# Upload File
 # =====================================================
 
 if new_features:
@@ -140,7 +161,8 @@ if new_features:
     )
 
     upload_url = (
-        f"{DATABRICKS_HOST}/api/2.0/fs/files{file_path}"
+        f"{DATABRICKS_HOST}"
+        f"/api/2.0/fs/files{file_path}"
     )
 
     upload_headers = {
@@ -167,6 +189,7 @@ else:
     print("No new earthquake events")
     print("No file created")
 
+
 # =====================================================
 # Record Processed IDs
 # =====================================================
@@ -191,7 +214,7 @@ if new_features:
     INSERT INTO {PROCESSED_TABLE}
     (earthquake_id, ingestion_time)
     VALUES
-    {",".join(values)}
+    {','.join(values)}
     """
 
     execute_sql(insert_sql)
