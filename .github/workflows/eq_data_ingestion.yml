@@ -27,4 +27,4 @@ jobs:
           DATABRICKS_HOST: ${{ secrets.DB_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DB_TOKEN }}
         run: |
-          python ingest.py
+          python eq_data_ingest.py
