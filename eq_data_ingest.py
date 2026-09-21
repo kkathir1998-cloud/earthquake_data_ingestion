@@ -76,6 +76,7 @@ def execute_sql(sql_text):
 # =====================================================
 
 response = requests.get(USGS_URL, timeout=30)
+print(response.text)
 response.raise_for_status()
 
 data = response.json()
