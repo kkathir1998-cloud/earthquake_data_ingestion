@@ -100,6 +100,11 @@ A few of the real issues hit during development:
   wouldn't filter both. Fixed by adding an `event_date` column to
   Silver, populated from the earthquake event timestamp.
 
+## BI link
+
+link:https://datastudio.google.com/s/vzBbuAPR-m4
+
+Note: Dashboard sync 12 hrs once
 ## Current Status / Roadmap
 
 - ✅ USGS `all_day` GeoJSON feed integrated
