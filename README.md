@@ -17,39 +17,7 @@ resources only.
 
 ## Architecture
 
-```
-USGS Earthquake Feed
-        |
-        v
-GitHub Actions (scheduled ingestion)
-        |
-        v
-Compare against processed earthquake IDs
-        |
-   +----+----+
-   |         |
-  No        Yes
-   |         |
-No file   New JSON file
-          written to Unity Catalog Volume
-                |
-                v
-           Auto Loader
-                |
-                v
-          BRONZE (raw JSON Delta)
-                |
-                v
-          SILVER (parsed, validated,
-                  geospatially enriched)
-                |
-                v
-          GOLD (incremental daily
-                earthquake metrics)
-                |
-                v
-           BI Dashboard
-```
+![Architecture](screenshots/eq_pipeline.png)
 
 External ingestion runs as plain Python via GitHub Actions calling the
 Databricks REST API — Spark and `dbutils` are not used in that layer.
