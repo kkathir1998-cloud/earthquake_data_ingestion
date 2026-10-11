@@ -61,9 +61,9 @@ Databricks REST API — Spark and `dbutils` are not used in that layer.
 ## Setup / How to Run
 
 ```bash
-# Clone the repo
-git clone <your-repo-url>
-cd <repo-name>
+# Clone the rep
+git clone https://github.com/kkathir1998-cloud/earthquake_data_ingestion.git
+cd earthquake_data_ingestion
 
 # Prerequisites:
 #   - A Databricks workspace (Free Edition) with Unity Catalog
